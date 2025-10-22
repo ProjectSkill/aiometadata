@@ -1,137 +1,104 @@
-const express = require('express');
-const { startServerWithCacheWarming } = require('./index.js');
-const { initializeMapper } = require('./lib/id-mapper.js');
-const { initializeAnimeListMapper } = require('./lib/anime-list-mapper.js');
-const { initializeMappings } = require('./lib/wiki-mapper.js');
-const { initializeRatings } = require('./lib/imdbRatings.js');
-const { runCacheCleanup } = require('./cache-cleanup.js');
-const { runCachePathMigration } = require('./lib/cache-path-migration.js');
-const database = require('./lib/database.js');
-const consola = require('consola');
-
-// Configure logging level based on environment
-const logLevel = process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug');
-consola.level = consola.LogLevels[logLevel.toLowerCase()] || (process.env.NODE_ENV === 'production' ? 3 : 4);
-
-const PORT = parseInt(process.env.PORT || '3232', 10);
-
-async function startServer() {
-  consola.info('--- Addon Starting Up ---');
-
-  process.on('uncaughtException', (error) => {
-    consola.error('--- UNCAUGHT EXCEPTION ---');
-    consola.error('Error:', error.message);
-    consola.error('Stack:', error.stack);
-    consola.error('This error was not caught and could crash the application.');
-  });
-
-  process.on('unhandledRejection', (reason, promise) => {
-    consola.error('--- UNHANDLED PROMISE REJECTION ---');
-    consola.error('Reason:', reason);
-    consola.error('Promise:', promise);
-    consola.error('This rejection was not handled and could crash the application.');
-  });
-
-  // Database must initialize first
-  consola.info('Initializing Database...');
-  await database.initialize();
-  consola.success('Database initialization complete.');
-
-  // Cache path migration
-  consola.info('Running cache path migration...');
-  await runCachePathMigration();
-  consola.success('Cache path migration complete.');
-
-  consola.info('Initializing Mappers, Ratings, and Cache Cleanup...');
-
-  const initializationTasks = [
-    {
-      name: 'ID Mapper (anime-list.json)',
-      task: async () => {
-        consola.info('Initializing ID Mapper...');
-        await initializeMapper();
-      },
-      critical: true
-    },
-    {
-      name: 'Anime List Mapper (anime-list.xml)',
-      task: async () => {
-        consola.info('Initializing Anime List Mapper...');
-        await initializeAnimeListMapper();
-      },
-      critical: true
-    },
-    {
-      name: 'Wiki Mappings',
-      task: async () => {
-        consola.info('Initializing Wiki Mappings...');
-        await initializeMappings();
-      },
-      critical: true
-    },
-    {
-      name: 'IMDb Ratings',
-      task: async () => {
-        consola.info('Initializing IMDb Ratings...');
-        await initializeRatings();
-      },
-      critical: true
-    },
-    {
-      name: 'Cache Cleanup Check',
-      task: async () => {
-        consola.info('Checking for one-time cache cleanup...');
-        await runCacheCleanup();
-      },
-      critical: false
-    }
-  ];
-
-  // Execute all tasks in parallel
-  const results = await Promise.allSettled(
-    initializationTasks.map(({ task }) => task())
-  );
-
-  // Check results and log appropriately
-  const failures = [];
-  results.forEach((result, index) => {
-    const { name, critical } = initializationTasks[index];
-    if (result.status === 'fulfilled') {
-      consola.success(`${name} initialization complete.`);
-    } else {
-      consola.error(`${name} failed to initialize:`, result.reason);
-      if (critical) {
-        failures.push(name);
-      }
-    }
-  });
-
-  // Abort startup if any critical tasks failed
-  if (failures.length > 0) {
-    throw new Error(`Critical initialization failures: ${failures.join(', ')}`);
+{
+  "name": "aio-metadata",
+  "version": "1.3.0",
+  "type": "module",
+  "description": "Metadata provider for Stremio",
+  "main": "server.cjs",
+  "scripts": {
+    "dev": "vite",
+    "dev:server": "nodemon addon/server.js",
+    "dev:server:ts": "nodemon --exec ts-node addon/server.ts",
+    "build": "vite build",
+    "build:dev": "vite build --mode development",
+    "build:backend": "tsc -p tsconfig.backend.json",
+    "build:backend:watch": "tsc -p tsconfig.backend.json --watch",
+    "start:backend": "node dist/server.js",
+    "start:backend:ts": "ts-node addon/server.ts",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "start": "node server.cjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cedya77/aiometadata"
+  },
+  "keywords": [
+    "tmdb",
+    "stremio",
+    "addon",
+    "metadata",
+    "tvdb",
+    "MyAnimeList"
+  ],
+  "author": "cedya",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/cedya77/aiometadata/issues"
+  },
+  "homepage": "https://github.com/cedya77/aiometadata#readme",
+  "dependencies": {
+    "@cospired/i18n-iso-languages": "^4.2.0",
+    "@dnd-kit/core": "^6.1.0",
+    "@dnd-kit/sortable": "^8.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@google/generative-ai": "^0.2.1",
+    "@radix-ui/react-accordion": "^1.1.2",
+    "@radix-ui/react-alert-dialog": "^1.0.5",
+    "@radix-ui/react-dialog": "^1.0.5",
+    "@radix-ui/react-dropdown-menu": "^2.0.6",
+    "@radix-ui/react-label": "^2.0.2",
+    "@radix-ui/react-popover": "^1.0.7",
+    "@radix-ui/react-progress": "^1.0.3",
+    "@radix-ui/react-scroll-area": "^1.0.5",
+    "@radix-ui/react-select": "^2.0.0",
+    "@radix-ui/react-slot": "^1.0.2",
+    "@radix-ui/react-switch": "^1.0.3",
+    "@radix-ui/react-tabs": "^1.0.4",
+    "@radix-ui/react-toast": "^1.1.5",
+    "@radix-ui/react-tooltip": "^1.0.7",
+    "@tanstack/react-query": "^5.32.1",
+    "axios": "^1.7.9",
+    "bcrypt": "^5.1.0",
+    "cache-manager": "^3.6.3",
+    "cache-manager-ioredis": "^2.1.0",
+    "cheerio": "^1.0.0-rc.12",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "cmdk": "^0.2.0",
+    "consola": "^3.2.3",
+    "country-iso-2-to-3": "^1.1.0",
+    "csv-parse": "^5.5.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "fanart.tv-api": "^2.0.1",
+    "fetch-socks": "^1.3.2",
+    "framer-motion": "^11.1.7",
+    "ioredis": "^5.3.2",
+    "kitsu": "^10.0.4",
+    "lucide-react": "^0.379.0",
+    "lz-string": "^1.5.0",
+    "moviedb-promise": "^4.0.7",
+    "name-to-imdb": "^3.0.4",
+    "next-themes": "^0.3.0",
+    "node-fetch": "^2.7.0",
+    "p-limit": "^4.0.0",
+    "p-queue": "^7.4.1",
+    "pg": "^8.11.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-kofi": "^0.0.2",
+    "react-router-dom": "^6.22.3",
+    "recharts": "^2.12.7",
+    "serve-favicon": "^2.5.0",
+    "sharp": "^0.33.3",
+    "socks-proxy-agent": "^8.0.3",
+    "sonner": "^1.4.41",
+    "sqlite3": "^5.1.7",
+    "swagger-stats": "^0.99.7",
+    "tailwind-merge": "^2.2.2",
+    "transliteration": "^2.3.5",
+    "undici": "^6.11.1",
+    "url-exists": "^1.0.3",
+    "xml2js": "^0.6.2"
   }
-
-  consola.success('All initializations complete.');
-
-  // PHASE 3: Start server with cache warming
-  consola.info('Starting server with cache warming...');
-  const addon = await startServerWithCacheWarming();
-
-  // PHASE 4: Start background catalog warming (after server initialization)
-  const { startMALWarmup } = require('./lib/malCatalogWarmer.js');
-  startMALWarmup();
-
-  const { startComprehensiveCatalogWarming } = require('./lib/comprehensiveCatalogWarmer.js');
-  startComprehensiveCatalogWarming();
-
-  addon.listen(PORT, () => {
-    consola.success(`Addon active and listening on port ${PORT}.`);
-    consola.info(`Open http://127.0.0.1:${PORT} in your browser.`);
-  });
 }
-
-startServer().catch((error) => {
-  consola.error('--- FATAL STARTUP ERROR ---');
-  consola.error(error);
-  process.exit(1);
-});
